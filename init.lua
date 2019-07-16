@@ -154,15 +154,15 @@ function StdoutLogger:initialize(options)
   options = options or {}
   options.fd = options.fd or 1
   Logger.initialize(self, options)
-  self._stream = fs.WriteStream:new(nil, self.options)
 end
 
 function StdoutLogger:close()
-  self._stream:_end()
 end
 
 function StdoutLogger:_write(data, callback)
-  self._stream:write(data, callback)
+  io.stdout:write(data)
+  io.stdout:flush()
+  if callback then callback() end
 end
 
 -------------------------------------------------------------------------------
@@ -177,15 +177,15 @@ function StderrLogger:initialize(options)
   options = options or {}
   options.fd = options.fd or 2
   Logger.initialize(self, options)
-  self._stream = fs.WriteStream:new(nil, self.options)
 end
 
 function StderrLogger:close()
-  self._stream:_end()
 end
 
 function StderrLogger:_write(data, callback)
-  self._stream:write(data, callback)
+  io.stderr:write(data)
+  io.stderr:flush()
+  if callback then callback() end
 end
 
 
