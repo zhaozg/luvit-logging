@@ -32,10 +32,10 @@ require('tap')(function(test)
   function BufferLogger:_clear()
     self._buffer = {}
   end
-  
+
   function BufferLogger:_write(data, callback)
     table.insert(self._buffer, data)
-    callback()
+    if callback then callback() end
   end
 
   test('test simple writes', function()
@@ -91,105 +91,4 @@ require('tap')(function(test)
     end
   end)
 
-  test('stdoutfile logger (stdout)', function(expect)
-    local cmd, args, stdout, onRead, handle
-    local count = 0
-
-    function onRead(err, data)
-      assert(err == nil)
-      if data == nil then
-        assert(count == 2)
-        uv.close(stdout)
-      else
-        count = count + 1
-        p(data)
-      end
-    end
-
-    stdout = uv.new_pipe(false)
-    cmd = uv.exepath()
-    args = { pathJoin(module.dir, 'scripts', 'stdoutfile-stdout.lua') }
-    p(cmd, args)
-    handle = uv.spawn(cmd, {
-      args = args,
-      stdio = { nil, stdout}
-    }, function()
-      uv.close(handle)
-    end)
-
-    uv.read_start(stdout, onRead)
-  end)
-
-  test('stdoutfile logger (file)', function(expect)
-    local run, filename, onRead
-
-    filename = 'test-log.txt'
-
-    function onRead(err, data)
-      assert(err == nil)
-      if data == nil then
-        assert(count == 2)
-        uv.close(stdout)
-      else
-        count = count + 1
-        p(data)
-      end
-    end
-
-    function run(callback)
-      local handle
-      handle = uv.spawn(uv.exepath(), {
-        args = { pathJoin(module.dir, 'scripts', 'stdoutfile-file.lua') },
-      }, function(code)
-        assert(code == 0)
-        uv.close(handle)
-        callback()
-      end)
-    end
-
-    uv.fs_unlink(filename)
-    run(function()
-      local data, count
-      data = fs.readFileSync(filename)
-      count = 0
-      for line in data:gmatch("[^\r\n]+") do
-        count = count + 1
-        p(line)
-      end
-      uv.fs_unlink(filename)
-      assert(count == 2)
-    end)
-  end)
-
-  test('stdoutfile logger (rotate)', function(expect)
-    local log, filename, onRotated, timer
-
-    filename = 'test-log.txt'
-
-    function onRotated() p('rotated') end
-    function cleanup() uv.fs_unlink(filename) end
-
-    cleanup()
-    log = logger.StdoutFileLogger:new({path = filename})
-    log:on('rotated', expect(onRotated))
-    logger.init(log)
-    logger.critical('message1')
-    logger.rotate()
-    logger.critical('message2')
-    logger.critical('message3')
-
-    timer = uv.new_timer()
-    uv.timer_start(timer, 100, 0, function()
-      local data, count
-      data = fs.readFileSync(filename)
-      count = 0
-      for line in data:gmatch("[^\r\n]+") do
-        count = count + 1
-        p(line)
-      end
-      assert(count == 3)
-      uv.fs_unlink(filename)
-      uv.close(timer)
-    end)
-  end)
 end)

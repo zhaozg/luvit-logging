@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 --]]
-local Writable = require('stream').Writable
+local Emitter = require('core').Emitter
 local fs = require('fs')
 local format = require('string').format
 local los = require('los')
@@ -40,7 +40,7 @@ else
   EOL = '\n'
 end
 
-local Logger = Writable:extend()
+local Logger = Emitter:extend()
 
 Logger.LEVELS = {
   ['nothing'] = 0,
@@ -64,10 +64,9 @@ Logger.LEVEL_STRS = {
 Logger.REVERSE_LEVELS = reverseMap(Logger.LEVELS)
 
 function Logger:initialize(options)
-  Writable.initialize(self)
   self.options = options or {}
   self.log_level = self.options.log_level or self.LEVELS['info']
-  self.error_stream = self.options.error_stream
+  self.callback = options.callback
 end
 
 function Logger:rotate() end
@@ -81,11 +80,7 @@ function Logger:getLogLevel()
 end
 
 function Logger:_log_buf(str)
-  self:write(str)
-end
-
-function Logger:_log_error_buf(str)
-  if self.error_stream then self.error_stream:write(str) end
+  self:_write(str, self.callback)
 end
 
 function Logger:_log(level, str)
@@ -105,9 +100,9 @@ function Logger:_log(level, str)
 
   bufs = table.concat(bufs)
   self:_log_buf(bufs)
-  
+
   if level == self.LEVELS['critical'] then
-    self:_log_error_buf(bufs)
+    io.stderr:write(bufs)
   end
 end
 
@@ -122,7 +117,7 @@ function FileLogger:initialize(options)
   Logger.initialize(self, options)
   assert(self.options.path, "path is missing")
   self._path = self.options.path
-  self._stream = fs.WriteStreamSync:new(self._path, self.options)
+  self._stream = fs.WriteStream:new(self._path, self.options)
   self:on('finish', utils.bind(self.close, self))
 end
 
@@ -136,7 +131,7 @@ end
 
 function FileLogger:rotate()
   local reopenCallback
-  
+
   function reopenCallback()
     self._stream:uncork()
     self:emit('rotated')
@@ -159,7 +154,7 @@ function StdoutLogger:initialize(options)
   options = options or {}
   options.fd = options.fd or 1
   Logger.initialize(self, options)
-  self._stream = fs.WriteStreamSync:new(nil, self.options)
+  self._stream = fs.WriteStream:new(nil, self.options)
 end
 
 function StdoutLogger:close()
@@ -167,11 +162,7 @@ function StdoutLogger:close()
 end
 
 function StdoutLogger:_write(data, callback)
-  local function onWriteCallback(...)
-    fs.fstatSync(self.options.fd)
-    callback(...)
-  end
-  self._stream:write(data, onWriteCallback)
+  self._stream:write(data, callback)
 end
 
 -------------------------------------------------------------------------------
@@ -186,7 +177,7 @@ function StderrLogger:initialize(options)
   options = options or {}
   options.fd = options.fd or 2
   Logger.initialize(self, options)
-  self._stream = fs.WriteStreamSync:new(nil, self.options)
+  self._stream = fs.WriteStream:new(nil, self.options)
 end
 
 function StderrLogger:close()
@@ -194,45 +185,9 @@ function StderrLogger:close()
 end
 
 function StderrLogger:_write(data, callback)
-  local function onWriteCallback(...)
-    fs.fstatSync(self.options.fd)
-    callback(...)
-  end
-  self._stream:write(data, onWriteCallback)
-end
-
--------------------------------------------------------------------------------
-
---[[
-  Detects if a path is passed in and enables file logging, or uses stdout.
-  options: {table}
-    path: {string?} filepath to use logging
---]]
-local StdoutFileLogger = Logger:extend()
-function StdoutFileLogger:initialize(options)
-  options = options or {}
-  options.error_stream = options.error_stream or StderrLogger:new()
-  Logger.initialize(self, options)
-  if options.path then
-    if not options.flags then options.flags = "a" end
-    self._stream = FileLogger:new(options)
-  else
-    self._stream = StdoutLogger:new(options)
-  end
-  self._stream:on('rotated', utils.bind(self.emit, self, 'rotated'))
-end
-
-function StdoutFileLogger:close()
-  self._stream:_end()
-end
-
-function StdoutFileLogger:rotate()
-  self._stream:rotate()
-end
-
-function StdoutFileLogger:_write(data, callback)
   self._stream:write(data, callback)
 end
+
 
 -------------------------------------------------------------------------------
 
