@@ -4,7 +4,6 @@ return {
   description = "Logging Library",
   author = "Ryan Phillips <ryan.phillips@rackspace.com>",
   dependencies = {
-    "luvit/luvit@2.1.0",
   },
   files = {
     "*.lua"
