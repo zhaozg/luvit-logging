@@ -65,6 +65,9 @@ Logger.REVERSE_LEVELS = reverseMap(Logger.LEVELS)
 
 function Logger:initialize(options)
   self.options = options or {}
+  if type(self.log_level)=='string' then
+    self.log_level = Logger.LEVELS[self.log_level]
+  end
   self.log_level = self.options.log_level or self.LEVELS['info']
   self.callback = options.callback
 end
@@ -218,9 +221,6 @@ exports.FileLogger = FileLogger
 
 -- Stderr Logger
 exports.StdoutLogger = StdoutLogger
-
--- Stderr File Logger
-exports.StdoutFileLogger = StdoutFileLogger
 
 -- Sets up exports[LOGGER_LEVELS] for easy logging
 exports.init = init
