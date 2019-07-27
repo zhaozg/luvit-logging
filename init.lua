@@ -206,6 +206,13 @@ local function init(stream)
   exports.instance = stream
 end
 
+local function close()
+  if exports.instance then
+    exports.instance:close()
+    exports.instance = nil
+  end
+end
+
 -------------------------------------------------------------------------------
 
 exports.LEVELS = Logger.LEVELS
@@ -224,5 +231,8 @@ exports.StdoutLogger = StdoutLogger
 
 -- Sets up exports[LOGGER_LEVELS] for easy logging
 exports.init = init
+
+-- Close stream inited
+exports.close = close
 
 init(exports.DefaultLogger)

@@ -91,4 +91,21 @@ require('tap')(function(test)
     end
   end)
 
+  test('test FileLogger', function()
+    local logfile = "test-log.txt"
+    logger.init(logger.FileLogger:new({path = logfile}))
+    logger.error('this is an error message')
+    logger.warning('this is a warning message')
+    logger.close()
+    assert(fs.existsSync(logfile))
+    assert(fs.unlinkSync(logfile))
+  end)
+
+  test('test StdoutLogger', function()
+    logger.init(logger.StdoutLogger:new())
+    logger.error('this is an error message')
+    logger.warning('this is a warning message')
+    logger.close()
+  end)
+
 end)
