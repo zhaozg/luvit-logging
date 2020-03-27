@@ -17,8 +17,6 @@ limitations under the License.
 --]]
 
 local fs = require('fs')
-local uv = require('uv')
-local pathJoin = require('luvi').path.join
 
 require('tap')(function(test)
   local logger = require('..')

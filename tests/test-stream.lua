@@ -17,8 +17,6 @@ limitations under the License.
 --]]
 
 local fs = require('fs')
-local uv = require('uv')
-local pathJoin = require('luvi').path.join
 
 require('tap')(function(test)
   local logger = require('..')
@@ -93,18 +91,26 @@ require('tap')(function(test)
 
   test('test FileLogger', function()
     local logfile = "test-log.txt"
-    logger.init(logger.FileLogger:new({path = logfile}))
-    logger.error('this is an error message')
-    logger.warning('this is a warning message')
-    logger.close()
-    assert(fs.existsSync(logfile))
-    assert(fs.unlinkSync(logfile))
+    local flog = logger.FileLogger:new({path = logfile})
+    flog:log(logger.LEVELS.error, 'this is an error message')
+    flog:log(logger.LEVELS.warning, 'this is a warning message')
+    flog:on('close', function()
+      assert(fs.existsSync(logfile))
+      assert(fs.unlinkSync(logfile))
+    end)
+    flog:close()
   end)
 
   test('test StdoutLogger', function()
-    logger.init(logger.StdoutLogger:new())
+    logger.init(logger.StdoutLogger:new({log_level=logger.LEVELS.everything}))
     logger.error('this is an error message')
     logger.warning('this is a warning message')
+    logger.nothingf('All the world\'s a stage')
+    logger.criticalf('and all the men and women merely players')
+    logger.errorf('they have their exits and their entrances;')
+    logger.warningf('and one man in his time plays many parts, his')
+    logger.infof('acts being seven ages.')
+    logger.debugf('William Shakespeare')
     logger.close()
   end)
 

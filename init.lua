@@ -86,7 +86,7 @@ function Logger:_log_buf(str)
   self:_write(str, self.callback)
 end
 
-function Logger:_log(level, str)
+function Logger:log(level, str)
   if self.log_level < level then
     return
   end
@@ -109,8 +109,8 @@ function Logger:_log(level, str)
   end
 end
 
-function Logger:_logf(level, fmt, ...)
-  self:_log(level, format(fmt, ...))
+function Logger:logf(level, fmt, ...)
+  self:log(level, format(fmt, ...))
 end
 
 -------------------------------------------------------------------------------
@@ -152,87 +152,90 @@ options:
   fd: {integer?} file descriptor
 --]]
 
-local StdoutLogger = Logger:extend()
-function StdoutLogger:initialize(options)
-  options = options or {}
-  options.fd = options.fd or 1
+local ConsoleLogger = Logger:extend()
+function ConsoleLogger:initialize(options)
+  assert(type(options)=='table')
+  assert(options.fd==1 or options.fd==2)
+  local colorize = require'pretty-print'.colorize
+
+  ConsoleLogger.LEVEL_STRS = {
+    [1] = colorize('err', ' CRT: '),
+    [2] = colorize('err', ' ERR: '),
+    [3] = colorize('failure', ' WRN: '),
+    [4] = colorize('success', ' INF: '),
+    [5] = colorize('highlight', ' DBG: '),
+    [6] = colorize('highlight', ' UNK: '),
+  }
   Logger.initialize(self, options)
 end
 
-function StdoutLogger:close()
+function ConsoleLogger:close()
 end
 
-function StdoutLogger:_write(data, callback)
+function ConsoleLogger:_write(data, callback)
   io.stdout:write(data)
   io.stdout:flush()
   if callback then callback() end
 end
 
--------------------------------------------------------------------------------
+local StdoutLogger = ConsoleLogger:extend()
+function StdoutLogger:initialize(options)
+  options = options or {}
+  options.fd = options.fd or 1
+  ConsoleLogger.initialize(self, options)
+end
 
---[[
-options:
-  fd: {integer?} file descriptor
---]]
-
-local StderrLogger = Logger:extend()
+local StderrLogger = ConsoleLogger:extend()
 function StderrLogger:initialize(options)
   options = options or {}
   options.fd = options.fd or 2
-  Logger.initialize(self, options)
+  ConsoleLogger.initialize(self, options)
 end
-
-function StderrLogger:close()
-end
-
-function StderrLogger:_write(data, callback)
-  io.stderr:write(data)
-  io.stderr:flush()
-  if callback then callback() end
-end
-
-
 -------------------------------------------------------------------------------
 
+local M = {}
 local function init(stream)
   for k, i in pairs(stream.LEVELS) do
-    exports[k] = utils.bind(stream._log, stream, i)
-    exports[k .. 'f'] = utils.bind(stream._logf, stream, i)
-    exports[k:upper()] = i
+    M[k] = utils.bind(stream.log, stream, i)
+    M[k .. 'f'] = utils.bind(stream.logf, stream, i)
+    M[k:upper()] = i
   end
-  exports.log = utils.bind(stream._log, stream)
-  exports.logf = utils.bind(stream._logf, stream)
-  exports.rotate = utils.bind(stream.rotate, stream)
-  exports.instance = stream
+  M.log = utils.bind(stream.log, stream)
+  M.logf = utils.bind(stream.logf, stream)
+  M.rotate = utils.bind(stream.rotate, stream)
+  M.instance = stream
 end
 
 local function close()
-  if exports.instance then
-    exports.instance:close()
-    exports.instance = nil
+  if M.instance then
+    M.instance:close()
+    M.instance = nil
   end
 end
 
 -------------------------------------------------------------------------------
 
-exports.LEVELS = Logger.LEVELS
+M.LEVELS = Logger.LEVELS
 
 -- Default Logger
-exports.DefaultLogger = StdoutLogger:new()
+M.DefaultLogger = StdoutLogger:new()
 
 -- Base Logger
-exports.Logger = Logger
+M.Logger = Logger
 
 -- File Logger
-exports.FileLogger = FileLogger
+M.FileLogger = FileLogger
 
 -- Stderr Logger
-exports.StdoutLogger = StdoutLogger
+M.StdoutLogger = StdoutLogger
 
--- Sets up exports[LOGGER_LEVELS] for easy logging
-exports.init = init
+-- Sets up M[LOGGER_LEVELS] for easy logging
+M.init = init
 
 -- Close stream inited
-exports.close = close
+M.close = close
 
-init(exports.DefaultLogger)
+init(M.DefaultLogger)
+
+return M
+
