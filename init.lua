@@ -125,8 +125,8 @@ function FileLogger:initialize(options)
   self:on('finish', utils.bind(self.close, self))
 end
 
-function FileLogger:close()
-  self._stream:_end()
+function FileLogger:close(cb)
+  self._stream:_end(cb)
 end
 
 function FileLogger:_write(data, callback)
@@ -170,7 +170,8 @@ function ConsoleLogger:initialize(options)
   Logger.initialize(self, options)
 end
 
-function ConsoleLogger:close()
+function ConsoleLogger:close(cb)
+  if cb then cb() end
 end
 
 function ConsoleLogger:_write(data, callback)
