@@ -17,6 +17,7 @@ limitations under the License.
 --]]
 
 local fs = require('fs')
+local uv = require('uv')
 
 require('tap')(function(test)
   local logger = require('..')
@@ -24,28 +25,43 @@ require('tap')(function(test)
   local BufferLogger = logger.Logger:extend()
   function BufferLogger:initialize(options)
     logger.Logger.initialize(self, options or {})
+    self._cache = {}
   end
 
   function BufferLogger:_write(data, callback)
-    callback()
+    self._cache[#self._cache + 1] = data
+    if callback then callback() end
+  end
+
+  function BufferLogger:close(cb)
+    local ctx = table.concat(self._cache, "\n")
+    self._cache = {}
+    self._stream:write(data, function()
+      FileLogger:close(self, cb)
+    end)
   end
 
   test('test BufferLogger bench', function()
-    local memb, meme, i, j
+    local memb, meme, timeb, timee, i, j
     local callback
 
     memb = collectgarbage('count')
+    timeb = uv.hrtime()
     i,j = 0, 0
     callback = function(err)
       if err then
         print("Error:", err)
       else
         j = j + 1
-        if j==10000 then
+        if j==1024*1024 then
           collectgarbage('collect')
           meme = collectgarbage('count')
-          print('memleaks',(meme-memb))
+          timee = uv.hrtime()
+
+          print(string.format('memleaks: %d, cost: %.02f',
+            (meme-memb), (timee-timeb) / 10^9))
           memb = meme
+          timeb = timee
           j = 0
           i = i + 1
         end
@@ -63,21 +79,27 @@ require('tap')(function(test)
 
   test('test FileLogger bench', function()
     local logfile = "test-log.txt"
-    local memb, meme, i, j
+    local memb, meme, timeb, timee, i, j
     local callback
 
     memb = collectgarbage('count')
+    timeb = uv.hrtime()
     i,j = 0, 0
+
     callback = function(err)
       if err then
         print("Error:", err)
       else
         j = j + 1
-        if j==10000 then
+        if j==1024*1024 then
           collectgarbage('collect')
           meme = collectgarbage('count')
-          print('memleaks',(meme-memb))
+          timee = uv.hrtime()
+
+          print(string.format('memleaks: %d, cost: %.02f',
+            (meme-memb), (timee-timeb) / 10^9))
           memb = meme
+          timeb = timee
           j = 0
           i = i + 1
         end

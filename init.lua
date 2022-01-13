@@ -86,6 +86,16 @@ function Logger:_log_buf(str)
   self:_write(str, self.callback)
 end
 
+function Logger:_log_format(level, str)
+  local bufs = {}
+  table.insert(bufs, os.date('%a %b %d %X %Y'))
+  table.insert(bufs, self.LEVEL_STRS[level])
+  table.insert(bufs, str)
+  table.insert(bufs, EOL)
+
+  return table.concat(bufs)
+end
+
 function Logger:log(level, str)
   if self.log_level < level then
     return
@@ -95,13 +105,7 @@ function Logger:log(level, str)
     return
   end
 
-  local bufs = {}
-  table.insert(bufs, os.date('%a %b %d %X %Y'))
-  table.insert(bufs, self.LEVEL_STRS[level])
-  table.insert(bufs, str)
-  table.insert(bufs, EOL)
-
-  bufs = table.concat(bufs)
+  local bufs =  self:_log_format(level, str)
   self:_log_buf(bufs)
 
   if level == self.LEVELS['critical'] then
