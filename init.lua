@@ -15,6 +15,7 @@ limitations under the License.
 --]]
 local Emitter = require('core').Emitter
 local fs = require('fs')
+local timer = require('timer')
 local format = require('string').format
 local los = require('los')
 local table = require('table')
@@ -70,6 +71,10 @@ function Logger:initialize(options)
   end
   self.log_level = self.options.log_level or self.LEVELS['info']
   self.callback = options.callback
+  if options.cache then
+    self.cached = {}
+    self.cached[0] = options.threshold or 100
+  end
 end
 
 function Logger:rotate() end
@@ -83,7 +88,11 @@ function Logger:getLogLevel()
 end
 
 function Logger:_log_buf(str)
-  self:_write(str, self.callback)
+  if str then
+    self:_write(str, self.callback)
+  elseif self.callback then
+    timer.setImmediate(self.callback)
+  end
 end
 
 function Logger:_log_format(level, str)
@@ -106,7 +115,21 @@ function Logger:log(level, str)
   end
 
   local bufs =  self:_log_format(level, str)
-  self:_log_buf(bufs)
+
+  if self.cached then
+    if #self.cached >= self.cached[0] then
+      local ival = self.cached[0]
+      local str = table.concat(self.cached, '\n')
+      self:_log_buf(str)
+      self.cached = {}
+      self.cached[0] = ival
+    else
+      self.cached[#self.cached+1] = bufs
+      self:_log_buf() -- fire callback
+    end
+  else
+    self:_log_buf(bufs)
+  end
 
   if level == self.LEVELS['critical'] then
     io.stderr:write(bufs)
@@ -125,29 +148,51 @@ function FileLogger:initialize(options)
   assert(self.options.path, "path is missing")
   self._path = self.options.path
   self.options.flags = self.options.flags or 'a+'
-  self._stream = fs.WriteStream:new(self._path, self.options)
+  if options.basic then
+    self._stream = assert(io.open(self._path, self.options.flags))
+  else
+    self._stream = fs.WriteStream:new(self._path, self.options)
+  end
   self:on('finish', utils.bind(self.close, self))
 end
 
 function FileLogger:close(cb)
-  self._stream:_end(cb)
+  if self.options.basic then
+    self._stream:close()
+    if cb then cb() end
+  else
+    self._stream:_end(cb)
+  end
 end
 
 function FileLogger:_write(data, callback)
-  self._stream:write(data, callback)
+  if self.options.basic then
+    self._stream:write(data)
+
+    if callback then
+      timer.setImmediate(callback)
+    end
+  else
+    self._stream:write(data, callback)
+  end
 end
 
 function FileLogger:rotate()
-  local reopenCallback
 
-  function reopenCallback()
-    self._stream:uncork()
-    self:emit('rotated')
+  if self.options.basic then
+    self._stream:flush()
+    self._stream:close()
+    self._stream = assert(io.open(self._path, self.options))
+  else
+    local function reopenCallback()
+      self._stream:uncork()
+      self:emit('rotated')
+    end
+
+    self._stream:cork() -- buffer writes
+    self._stream:once('open', reopenCallback)
+    self._stream:open() -- reopen file
   end
-
-  self._stream:cork() -- buffer writes
-  self._stream:once('open', reopenCallback)
-  self._stream:open() -- reopen file
 end
 
 -------------------------------------------------------------------------------

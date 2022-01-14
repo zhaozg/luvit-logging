@@ -19,6 +19,8 @@ limitations under the License.
 local fs = require('fs')
 local uv = require('uv')
 
+local threshold = 1024*100
+
 require('tap')(function(test)
   local logger = require('..')
 
@@ -53,13 +55,14 @@ require('tap')(function(test)
         print("Error:", err)
       else
         j = j + 1
-        if j==1024*1024 then
+        if j==threshold then
           collectgarbage('collect')
           meme = collectgarbage('count')
           timee = uv.hrtime()
 
-          print(string.format('memleaks: %d, cost: %.02f',
-            (meme-memb), (timee-timeb) / 10^9))
+          local cost = (timee-timeb) / 10^9
+          print(string.format('memleaks: %d, cost: %.02f BPS: %.02f',
+            (meme-memb), cost, j/cost))
           memb = meme
           timeb = timee
           j = 0
@@ -77,7 +80,7 @@ require('tap')(function(test)
     logger.warning('this is a warning message')
   end)
 
-  test('test FileLogger bench', function()
+  local function driver(options)
     local logfile = "test-log.txt"
     local memb, meme, timeb, timee, i, j
     local callback
@@ -91,13 +94,15 @@ require('tap')(function(test)
         print("Error:", err)
       else
         j = j + 1
-        if j==1024*1024 then
+        if j==threshold then
           collectgarbage('collect')
           meme = collectgarbage('count')
           timee = uv.hrtime()
 
-          print(string.format('memleaks: %d, cost: %.02f',
-            (meme-memb), (timee-timeb) / 10^9))
+          local cost = (timee-timeb) / 10^9
+          print(string.format('memleaks: %d, cost: %.02f BPS: %.02f',
+            (meme-memb), cost, j/cost))
+
           memb = meme
           timeb = timee
           j = 0
@@ -113,8 +118,28 @@ require('tap')(function(test)
       end
     end
 
-    logger.init(logger.FileLogger:new({path = logfile, callback=callback}))
+    options = options or {}
+    options.path = logfile
+    options.callback = callback
+
+    logger.init(logger.FileLogger:new(options))
     logger.warning('this is a warning message')
+  end
+
+  test('test FileLogger bench', function()
+    driver({})
+  end)
+
+  test('test FileLogger(cache) bench', function()
+    driver({cache=true})
+  end)
+
+  test('test FileLogger(basic) bench', function()
+    driver({basic=true})
+  end)
+
+  test('test FileLogger(cache,basic) bench', function()
+    driver({basic=true, cache=true})
   end)
 
 end)
