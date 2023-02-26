@@ -33,6 +33,146 @@ end
 
 -------------------------------------------------------------------------------
 
+local controls
+local theme = {}
+local useColors = false
+local defaultTheme
+
+local themes = {
+  -- nice color theme using 16 ansi colors
+  [16] = {
+    property     = "0;37", -- white
+    sep          = "1;30", -- bright-black
+    braces       = "1;30", -- bright-black
+
+    ["nil"]      = "1;30", -- bright-black
+    boolean      = "0;33", -- yellow
+    number       = "1;33", -- bright-yellow
+    string       = "0;32", -- green
+    quotes       = "1;32", -- bright-green
+    escape       = "1;32", -- bright-green
+    ["function"] = "0;35", -- purple
+    thread       = "1;35", -- bright-purple
+
+    table        = "1;34", -- bright blue
+    userdata     = "1;36", -- bright cyan
+    cdata        = "0;36", -- cyan
+
+    err          = "1;31", -- bright red
+    success      = "1;33;42", -- bright-yellow on green
+    failure      = "1;33;41", -- bright-yellow on red
+    highlight    = "1;36;44", -- bright-cyan on blue
+  },
+  -- nice color theme using ansi 256-mode colors
+  [256] = {
+    property     = "38;5;253",
+    braces       = "38;5;247",
+    sep          = "38;5;240",
+
+    ["nil"]      = "38;5;244",
+    boolean      = "38;5;220", -- yellow-orange
+    number       = "38;5;202", -- orange
+    string       = "38;5;34",  -- darker green
+    quotes       = "38;5;40",  -- green
+    escape       = "38;5;46",  -- bright green
+    ["function"] = "38;5;129", -- purple
+    thread       = "38;5;199", -- pink
+
+    table        = "38;5;27",  -- blue
+    userdata     = "38;5;39",  -- blue2
+    cdata        = "38;5;69",  -- teal
+
+    err          = "38;5;196", -- bright red
+    success      = "38;5;120;48;5;22",  -- bright green on dark green
+    failure      = "38;5;215;48;5;52",  -- bright red on dark red
+    highlight    = "38;5;45;48;5;236",  -- bright teal on dark grey
+  },
+}
+
+local special = {
+  [7] = 'a',
+  [8] = 'b',
+  [9] = 't',
+  [10] = 'n',
+  [11] = 'v',
+  [12] = 'f',
+  [13] = 'r'
+}
+
+local color, colorize, loadColors
+
+function loadColors(index)
+  if index == nil then index = defaultTheme end
+
+  -- Remove the old theme
+  for key in pairs(theme) do
+    theme[key] = nil
+  end
+
+  if index then
+    local new = themes[index]
+    if not new then error("Invalid theme index: " .. tostring(index)) end
+    -- Add the new theme
+    for key in pairs(new) do
+      theme[key] = new[key]
+    end
+    useColors = true
+  else
+    useColors = false
+  end
+
+  --[[
+  quote    = colorize('quotes', "'", 'string')
+  quote2   = colorize('quotes', "'")
+  dquote   = colorize('quotes', '"', 'string')
+  dquote2  = colorize('quotes', '"')
+  obrace   = colorize('braces', '{ ')
+  cbrace   = colorize('braces', '}')
+  obracket = colorize('property', '[')
+  cbracket = colorize('property', ']')
+  comma    = colorize('sep', ', ')
+  equals   = colorize('sep', ' = ')
+  --]]
+
+  controls = {}
+  for i = 0, 31 do
+    local c = special[i]
+    if not c then
+      if i < 10 then
+        c = "00" .. tostring(i)
+      else
+        c = "0" .. tostring(i)
+      end
+    end
+    controls[i] = colorize('escape', '\\' .. c, 'string')
+  end
+  controls[92] = colorize('escape', '\\\\', 'string')
+  controls[34] = colorize('escape', '\\"', 'string')
+  controls[39] = colorize('escape', "\\'", 'string')
+  for i = 128, 255 do
+    local c
+    if i < 100 then
+      c = "0" .. tostring(i)
+    else
+      c = tostring(i)
+    end
+    controls[i] = colorize('escape', '\\' .. c, 'string')
+  end
+
+end
+
+function color(colorName)
+  return '\27[' .. (theme[colorName] or '0') .. 'm'
+end
+
+function colorize(colorName, string, resetName)
+  return useColors and
+    (color(colorName) .. tostring(string) .. color(resetName)) or
+    tostring(string)
+end
+-------------------------------------------------------------------------------
+
+
 local EOL
 
 if los.type() == 'win32' then
@@ -206,7 +346,7 @@ local ConsoleLogger = Logger:extend()
 function ConsoleLogger:initialize(options)
   assert(type(options)=='table')
   assert(options.fd==1 or options.fd==2)
-  local colorize = require'pretty-print'.colorize
+  loadColors()
 
   ConsoleLogger.LEVEL_STRS = {
     [1] = colorize('err', ' CRT: '),
